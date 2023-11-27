@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Input Data Artikel</title>
+    <!-- Tambahkan link stylesheet Bootstrap -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <div class="container mt-4">
+        <!-- Form Input Artikel di Kiri -->
+        <div class="form-container">
+            <h2>Form Input Artikel</h2>
+            <form action="dataphp/input.php" method="post">
+                <div class="form-group">
+                    <label for="judul">Judul Artikel:</label>
+                    <input type="text" name="judul" class="form-control" id="judul"
+                        placeholder="Masukkan judul artikel">
+                </div>
+                <div class="form-group">
+                    <label for="url">URL Artikel:</label>
+                    <input type="text" name="url" class="form-control" id="url" placeholder="Masukkan URL artikel">
+                </div>
+                <div class="form-group">
+                    <label for="deskripsi">Deskripsi Artikel:</label>
+                    <textarea class="form-control" id="deskripsi" name="deskripsi" rows="3"
+                        placeholder="Masukkan deskripsi artikel"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Tambah Artikel</button>
+            </form>
+        </div>
+
+        <!-- Tabel Artikel di Kanan -->
+        <div class="table-container">
+            <h2>Daftar Artikel</h2>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead class="text-center">
+                        <tr>
+                            <th>Judul</th>
+                            <th>URL</th>
+                            <th>Deskripsi</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="tableBody text-center">
+
+                        <?php
+                        // Panggil skrip koneksi
+                        require_once 'dataphp/connection.php';
+
+                        try {
+                            // SQL untuk melakukan SELECT * FROM datalink
+                            $sql = "SELECT * FROM datalink";
+
+                            // Siapkan pernyataan SQL menggunakan metode prepare
+                            $stmt = $koneksi->prepare($sql);
+
+                            // Eksekusi pernyataan SQL
+                            $stmt->execute();
+
+                            // Ambil semua baris hasil sebagai array
+                            $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                            // Loop through the data and create table rows
+                            foreach($result as $article) {
+                                echo "<tr>
+                                    <td>${article['judul']}</td>
+                                    <td>${article['url']}</td>
+                                    <td>${article['deskripsi']}</td>
+                                    <td class='d-flex justify-content-center'>
+                                        <button class='btn btn-warning editBtn mr-2' data-judul='${article['judul']}'>Edit</button>
+                                        <button class='btn btn-success saveBtn' data-judul='${article['judul']}' style='display:none;'>Save</button>
+                                        <button class='btn btn-danger deleteBtn mr-2' data-judul='${article['judul']}'>Delete</button>
+                                    </td>
+                                </tr>";
+                            }
+                        } catch (PDOException $e) {
+                            // Handle error if needed
+                            echo "<tr><td colspan='4'>Error retrieving data: ".$e->getMessage()."</td></tr>";
+                        }
+                        ?>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Pagination -->
+            <nav aria-label="Page navigation example">
+                <ul class="pagination" id="pagination">
+                    <li class="page-item">
+                        <button class="btn btn-secondary pagination-btn" id="prevBtn">Previous</button>
+                    </li>
+                    <li class="page-item">
+                        <button class="btn btn-secondary pagination-btn" id="nextBtn">Next</button>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Tambahkan script Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const tableBody = document.querySelector(".tableBody");
+            const form = document.querySelector("form");
+            const itemsPerPage = 7;
+            let articles = <?php echo json_encode($result); ?>;
+            let currentPage = 0;
+            let currentlyEditing = null;
+
+            function attachEventListeners() {
+                document.querySelectorAll('.editBtn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const judul = this.getAttribute('data-judul');
+                        const selectedArticle = articles.find(article => article['judul'] === judul);
+
+                        // Populate the form fields with the selected article data
+                        form.elements['judul'].value = selectedArticle['judul'];
+                        form.elements['url'].value = selectedArticle['url'];
+                        form.elements['deskripsi'].value = selectedArticle['deskripsi'];
+
+                        if (currentlyEditing !== null && currentlyEditing !== judul) {
+                            document.querySelector(`.saveBtn[data-judul="${currentlyEditing}"]`).style.display = 'none';
+                            document.querySelector(`.editBtn[data-judul="${currentlyEditing}"]`).style.display = 'block';
+                        }
+                        currentlyEditing = judul;
+                        this.style.display = 'none';
+                        document.querySelector(`.saveBtn[data-judul="${judul}"]`).style.display = 'block';
+                    });
+                });
+
+                document.querySelectorAll('.saveBtn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const judul = this.getAttribute('data-judul');
+                        const updatedJudul = form.elements['judul'].value;
+                        const updatedUrl = form.elements['url'].value;
+                        const updatedDeskripsi = form.elements['deskripsi'].value;
+
+                        // Make an AJAX request to update.php
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', 'dataphp/update.php', true);
+                        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+                        const data = `judul=${encodeURIComponent(judul)}&updatedJudul=${encodeURIComponent(updatedJudul)}&updatedUrl=${encodeURIComponent(updatedUrl)}&updatedDeskripsi=${encodeURIComponent(updatedDeskripsi)}`;
+
+                        xhr.onreadystatechange = function () {
+                            if (xhr.readyState === XMLHttpRequest.DONE) {
+                                if (xhr.status === 200) {
+                                    // Successfully updated, you can handle the response if needed
+                                    console.log(xhr.responseText);
+
+                                    // Reload the page to refresh the table
+                                    location.reload();
+                                } else {
+                                    // Handle error
+                                    console.error(xhr.statusText);
+                                }
+                            }
+                        };
+
+                        xhr.send(data);
+
+                        this.style.display = 'none';
+                        document.querySelector(`.editBtn[data-judul="${judul}"]`).style.display = 'block';
+                        currentlyEditing = null;
+                    });
+                });
+
+                document.querySelectorAll('.deleteBtn').forEach(btn => {
+                    btn.addEventListener('click', function () {
+                        const judulToDelete = this.getAttribute('data-judul');
+
+                        // Konfirmasi sebelum menghapus
+                        const confirmDelete = confirm(`Apakah Anda yakin ingin menghapus artikel dengan judul: ${judulToDelete}?`);
+
+                        if (confirmDelete) {
+                            // Buat AJAX request untuk delete.php menggunakan jQuery
+                            $.ajax({
+                                url: 'dataphp/delete.php',
+                                type: 'POST',
+                                data: { judul: judulToDelete },
+                                success: function (response) {
+                                    // Berhasil menghapus, tanggapi respons jika diperlukan
+                                    console.log(response);
+
+                                    // Reload halaman untuk memperbarui tabel
+                                    location.reload();
+                                },
+                                error: function (xhr, status, error) {
+                                    // Handle error
+                                    console.error(error);
+                                }
+                            });
+                        }
+                    });
+                });
+            }
+
+            function displayArticles(startIndex) {
+                const endIndex = startIndex + itemsPerPage;
+                const displayedArticles = articles.slice(startIndex, endIndex);
+
+                tableBody.innerHTML = "";
+
+                displayedArticles.forEach(article => {
+                    tableBody.innerHTML += `<tr>
+                <td>${article['judul']}</td>
+                <td>${article['url']}</td>
+                <td>${article['deskripsi']}</td>
+                <td class='d-flex justify-content-center'>
+                    <button class='btn btn-warning editBtn mr-2' data-judul='${article['judul']}'>Edit</button>
+                    <button class='btn btn-success saveBtn' data-judul='${article['judul']}' style='display:none;'>Save</button>
+                    <button class='btn btn-danger deleteBtn mr-2' data-judul='${article['judul']}'>Delete</button>
+                </td>
+            </tr>`;
+                });
+
+                attachEventListeners(); // Attach event listeners after updating content
+            }
+
+            function displayPagination() {
+                const totalPages = Math.ceil(articles.length / itemsPerPage);
+
+                document.getElementById("prevBtn").disabled = currentPage === 0;
+                document.getElementById("nextBtn").disabled = currentPage === totalPages - 1;
+
+                document.getElementById("prevBtn").textContent = "Previous";
+                document.getElementById("nextBtn").textContent = "Next";
+
+                document.getElementById("prevBtn").addEventListener("click", function () {
+                    if (currentPage > 0) {
+                        currentPage--;
+                        const startIndex = currentPage * itemsPerPage;
+                        displayArticles(startIndex);
+                        displayPagination();
+                    }
+                });
+
+                document.getElementById("nextBtn").addEventListener("click", function () {
+                    if (currentPage < totalPages - 1) {
+                        currentPage++;
+                        const startIndex = currentPage * itemsPerPage;
+                        displayArticles(startIndex);
+                        displayPagination();
+                    }
+                });
+            }
+
+
+            displayArticles(0);
+            displayPagination();
+
+        });
+    </script>
+
+</body>
+
+</html>
